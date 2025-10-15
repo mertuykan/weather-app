@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather App</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #89f7fe, #66a6ff);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+    transition: background 0.5s ease;
+  }
+  h1 {
+    margin-bottom: 30px;
+    font-weight: 600;
+    font-size: 2rem;
+  }
+  .search-box {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 400px;
+  }
+  input {
+    flex: 1;
+    padding: 12px 15px;
+    border: none;
+    border-radius: 12px;
+    outline: none;
+    font-size: 1rem;
+  }
+  button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 12px;
+    background-color: #ffffff33;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  button:hover { background-color: #ffffff55; }
+  #weather {
+    margin-top: 40px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 30px;
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    transition: 0.3s;
+  }
+  #forecast {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .day {
+    background-color: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    padding: 10px;
+    transition: 0.3s;
+  }
+  .day:hover {
+    background-color: rgba(255,255,255,0.3);
+    transform: scale(1.05);
+  }
+  .day h4 {
+    margin: 5px 0;
+    font-size: 1rem;
+  }
+  .day p {
+    margin: 5px 0;
+    font-size: 0.95rem;
+  }
+  @media (max-width: 500px) {
+    .search-box { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<h1>🌦️ Hava Durumu Uygulaması</h1>
+
+<div class="search-box">
+  <input type="text" id="city" placeholder="Şehir girin...">
+  <button onclick="getWeather()">Göster</button>
+</div>
+
+<div id="weather"></div>
+
+<script>
+async function getWeather() {
+  const city = document.getElementById('city').value.trim();
+  const weatherDiv = document.getElementById('weather');
+  weatherDiv.innerHTML = 'Yükleniyor...';
+
+  try {
+    // Şehir koordinatlarını al
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}&language=tr&count=1`);
+    const geoData = await geoRes.json();
+
+    if (!geoData.results || geoData.results.length === 0) {
+      weatherDiv.innerHTML = `<p>Şehir bulunamadı 😔</p>`;
+      return;
+    }
+
+    const { latitude, longitude, name, country } = geoData.results[0];
+
+    // Hava durumu verisini al (günlük tahmin dahil)
+    const weatherRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`
+    );
+    const weatherData = await weatherRes.json();
+    const current = weatherData.current;
+    const daily = weatherData.daily;
+
+    // İkon eşleştirmeleri
+    const icons = {
+      0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+      45: "🌫️", 48: "🌫️", 51: "🌦️", 61: "🌧️",
+      71: "❄️", 95: "⛈️"
+    };
+    const icon = icons[current.weather_code] || "🌡️";
+
+    // Arka plan
+    const bg = {
+      "☀️": "linear-gradient(135deg, #f6d365 0%, #fda085 100%)",
+      "🌧️": "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #0082c8 100%)",
+      "⛅": "linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)",
+      "☁️": "linear-gradient(135deg, #d7d2cc 0%, #304352 100%)",
+      "❄️": "linear-gradient(135deg, #83a4d4 0%, #b6fbff 100%)",
+      "⛈️": "linear-gradient(135deg, #141e30 0%, #243b55 100%)"
+    };
+    document.body.style.background = bg[icon] || "#66a6ff";
+
+    // 5 günlük tahmin oluştur
+    let forecastHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(daily.time[i]);
+      const dayName = date.toLocaleDateString('tr-TR', { weekday: 'short' });
+      const dailyIcon = icons[daily.weather_code[i]] || "🌡️";
+      forecastHTML += `
+        <div class="day">
+          <h4>${dayName}</h4>
+          <p>${dailyIcon}</p>
+          <p>${daily.temperature_2m_max[i]}° / ${daily.temperature_2m_min[i]}°</p>
+        </div>
+      `;
+    }
+
+    // HTML yazdır
+    weatherDiv.innerHTML = `
+      <h2>${icon} ${name}, ${country}</h2>
+      <p>🌡️ Sıcaklık: ${current.temperature_2m} °C</p>
+      <p>💨 Rüzgar: ${current.wind_speed_10m} km/h</p>
+      <p>💧 Nem: ${current.relative_humidity_2m}%</p>
+      <div id="forecast">${forecastHTML}</div>
+    `;
+  } catch (err) {
+    weatherDiv.innerHTML = `<p>Hata: ${err.message}</p>`;
+  }
+}
+</script>
+</body>
+</html>
